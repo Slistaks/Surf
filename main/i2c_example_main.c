@@ -124,7 +124,7 @@ static const char *TAG = "i2c-example";
 #define CAPDAC_MIN			0
 
 
-#define CAPDAC_DEFAULT		13
+#define CAPDAC_DEFAULT		15
 
 
 #define SAMPLE_RATE_DEFAULT 	CUATROCIENTAS_Ss //CUATROCIENTAS_Ss
