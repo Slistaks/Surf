@@ -14,12 +14,15 @@
 #include <stdio.h>
 #include "esp_log.h"
 #include "driver/i2c.h"
+#include "math.h"
 
 //interrupt
 #include <stdlib.h>
 #include "driver/gpio.h"
 #include "driver/timer.h"
 //interrupt
+
+#include <driver/dac.h>
 
 //mqtt headers
 #include <stdint.h>
@@ -116,6 +119,22 @@ static const char *TAG = "i2c-example";
 
 #define NUMERO_DE_SENSOR 		2
 #define ORDEN_APROXIMACION		3
+#define ALTURA_MIN				10		// cambiar por el que va.
+#define ALTURA_MAX				70		// cambiar por el que va.
+
+#define DAC_COEF				255.f/(ALTURA_MAX-ALTURA_MIN)
+
+
+
+
+
+
+
+
+
+
+
+
 
 #define ALARM_MS 			50
 #define cantMedidas 		50
@@ -649,6 +668,7 @@ uint16_t mm_offset_cal= 0;			// el offset de nivel al calibrar.
 static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 {
 	uint8_t syncTest= 0;
+	uint8_t dacVal= 0;
 	example_timer_event_t evt;
 
 	char topic[50];
@@ -665,7 +685,9 @@ static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 
 
 	//float cap_temp;
-	float capacidad[50];
+	//float capacidad[50];
+	float cap;
+
 
 
 	//float desviacionAceptable= 0.2;
@@ -691,8 +713,6 @@ static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 
 
 
-
-
     		if(parar){
     			pararConfirmado++;
     		}else{
@@ -703,211 +723,29 @@ static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 
 
 
-
-
-
-    		//BLOQUE QUE TOMA UNA SOLA MEDIDA CON CAPDAC FIJO:
-			//read_single_cap_pF(&capacidad[sampleNumber], medidaNIVEL);
-			//capacidad[sampleNumber] = capacidad[sampleNumber]+3.125*CAPDAC_DEFAULT;
-			//FIN BLOQUE QUE TOMA UNA SOLA MEDIDA CON CAPDAC FIJO
-
-
-
-
-
-
-
-    		//BLOQUE MEDIA DE n MEDIDAS:
-    		/*
-    		capacidad[sampleNumber] = 0;
-    		for (int i = 0; i < N_MUESTRAS_MEDIA; i++) {														//
-    			read_single_cap_pF(&temp, medidaNIVEL);
-    			capacidad[sampleNumber] += temp;
-    			usleep(DELAY_ENTREMUESTRAS_US);								//11ms para 100Ss					//
-    		}
-    		capacidad[sampleNumber] /= N_MUESTRAS_MEDIA;														//
-    		capacidad[sampleNumber] = capacidad[sampleNumber] + 3.125 * CAPDAC_DEFAULT;
-			*/
-    		//MEDIA DE n MEDIDAS
-
-
-
-
-    		//BLOQUE QUE FILTRA CON FIR
-
-    		//SampleFilter_put(&signalFilter_struct, capacidad[sampleNumber]);
-    		//capacidad[sampleNumber]= SampleFilter_get(&signalFilter_struct);
-
-    		//BLOQUE QUE FILTRA CON FIR
-
-
-
-
-
-
     		//PARA TENER UN MUESTREO UNIFORME Y DE 400Ss, SE MIDE Y SE FILTRA EN UNA TAREA DISTINTA.
 
     		xSemaphoreTake(ultimaMedida_mux, portMAX_DELAY);
-    		capacidad[sampleNumber]= last_filtered_cap;
+    		//capacidad[sampleNumber]= last_filtered_cap;
+    		cap= last_filtered_cap;
     		xSemaphoreGive(ultimaMedida_mux);
-
     		//FIN BLOQUE QUE LEE CAPACIDAD FILTRADA OBTENIDA DE OTRA TAREA.
 
+    		//DAC_COEF escala de [altura_min, altura_max] -> [0, 255] flotante, asi no propago errores de errores. redondeo al final cuando mando al dac.
+    		printf("dac_coef: %.1f, altura: %.1f, dacVal: %d\n", DAC_COEF, cap_to_mm_floatReturn(ORDEN_APROXIMACION, cap, COEF_A, COEF_B, COEF_C, COEF_D), dacVal);
+    		//dacVal= (uint8_t) round(DAC_COEF * (cap_to_mm_floatReturn(ORDEN_APROXIMACION, cap, COEF_A, COEF_B, COEF_C, COEF_D) - ALTURA_MIN) );
 
+    		//MANDAR AL DAC:
 
+    		dac_output_voltage(DAC_CHANNEL_1, dacVal);
 
+    		//fin MANDAR AL DAC
 
 
 
-
-
-
-
-
-
-
-
-			//BLOQUE QUE HACE MEDIA MOVIL
-
-
-
-			//BLOQUE QUE HACE MEDIA MOVIL
-
-
-
-
-
-
-
-
-
-
-
-
-
-    		// TOMA DE MEDIDA:
-
-
-    		/* EN TODAS LAS MUESTRAS HACE AUTORANGING, ASI QUE REMPLAZO ESTE BLOQUE POR EL SIGUIENTE.__________________________________________________
-    		if(sampleNumber==0){				// medida de nivel AUTORANGO la primer medida, despues medidas normales:
-				capdac= read_autoranging_cap_pF(capacidad, medidaNIVEL);
-				//printf("primer medida, autoranging\ncapacidad: %0.2f\ncapdac: %d\n", capacidad[0]+capdac*3.125, capdac);
-    		}else{
-    			//read_single_cap_pF(&capacidad[sampleNumber], medidaNIVEL);
-    			read_processed_cap_pF(medidaNIVEL, desviacionAceptable, cantMuestras, &estructuraResultado);
-    			capacidad[sampleNumber]= estructuraResultado.mean;
-    		}
-    		*///EN TODAS LAS MUESTRAS HACE AUTORANGING, ASI QUE REMPLAZO ESTE BLOQUE POR EL SIGUIENTE._________________________________________________
-
-
-
-
-
-    		// ESTE BLOQUE HACE AUTORANGING EN TODAS LAS MEDIDAS (el anterior lo hacia solo en la muestra 0):____________________________
-    		//capdac= read_autoranging_cap_pF(&capacidad[sampleNumber], medidaNIVEL);		//
-    		// FIN DE BLOQUE AUTORANGING EN TODAS LAS MUESTRAS.__________________________________________________________________________
-
-
-
-    		/*
-    		//BLOQUE DE 3 RANGOS DE 28.125pF:______________________________________
-
-    		capdac= CAPDAC_MID_RANGE;
-    		MEASn_capdac_config(capdac, medidaNIVEL);
-    		usleep(8000);		// si este delay es menor a 6ms no alcanza para configurar el offset, y usa el offset anterior al configurado en la linea anterior.
-    		read_single_cap_pF(&capacidad[sampleNumber], medidaNIVEL);
-
-
-    		if(capacidad[sampleNumber]<-12.1){
-
-    			//printf("s: %d cambio al rango inferior vvvv     saturo con C: %f\n", sampleNumber, capacidad[sampleNumber]);		//debug
-
-    			//debug:
-    			if(rango!='L'){
-    				rango='L';
-    				printf("cambio de rango a L\n");
-    			}
-    			//fin debug.
-
-
-    			capdac= CAPDAC_MID_RANGE-6;		// lo empaqueta abajo, hay que actualizarlo.						//cambie de 9 a 8 por debug volver a 9.
-    			if(capdac<CAPDAC_MIN){
-    				printf("CAPDAC MENOR AL MINIMO CAPDAC.<<<<<<<<<<<<<<<<<<\n");
-    				capdac= CAPDAC_MIN;
-    			}
-
-    			//printf("saturo con: %.2f y capdac: %d\n", capacidad[sampleNumber], capdac+9);
-    			MEASn_capdac_config(capdac, medidaNIVEL);
-    			usleep(8000);	// si falla aumentar este delay														//alargue el delay por debug. volver a 8ms
-    			read_single_cap_pF(&capacidad[sampleNumber], medidaNIVEL);
-
-    			//if(rangoAnterior=='M')
-    				capacidad[sampleNumber]= capacidad[sampleNumber]+3.125*capdac+LOWER_RANGE_CORRECTION_OFFSET_FALLING_LVL;
-    			//else
-    				//capacidad[sampleNumber]= capacidad[sampleNumber]+3.125*capdac+LOWER_RANGE_CORRECTION_OFFSET_RISING_LVL;
-
-    			//rangoAnterior= 'L';
-
-    			//printf("la nueva medida en L es: C: %f, capdac: %d _-_-_-_-_-_-_-_-_-_-_-_-\n", capacidad[sampleNumber], capdac);
-
-    		}else if(12.1<capacidad[sampleNumber]){
-
-    			//printf("s: %d cambio al rango superior ^^^^     saturo con C: %f\n", sampleNumber, capacidad[sampleNumber]);		//debug
-
-    			//debug:
-				if(rango!='H'){
-					rango='H';
-
-					printf("cambio de rango a H, cap saturo en C: %.2f con capdac: %d\n", capacidad[sampleNumber], capdac);
-				}
-				//fin debug.
-
-
-				capdac= CAPDAC_MID_RANGE+6;		// lo empaqueta abajo, hay que actualizarlo.
-				if( CAPDAC_MAX < capdac ){
-					capdac= CAPDAC_MAX;
-				}
-
-
-				MEASn_capdac_config(capdac, medidaNIVEL);
-				usleep(8000);	// si falla aumentar este delay
-				read_single_cap_pF(&capacidad[sampleNumber], medidaNIVEL);
-				capacidad[sampleNumber]= capacidad[sampleNumber]+3.125*capdac+UPPER_RANGE_CORRECTION_OFFSET;
-
-				//printf("la nueva medida en H es: C: %.2f con capdac: %d _-_-_-_-_-_-_-_-_-_-_-_-\n", capacidad[sampleNumber], capdac);
-
-
-
-
-
-
-
-    		}else{
-
-    			capacidad[sampleNumber]= capacidad[sampleNumber]+3.125*capdac;
-
-    			//printf("s: %d rango medio-----------------       C: %f\n", sampleNumber, capacidad[sampleNumber]);
-    			//debug:
-				if(rango!='M'){
-					rango='M';
-					printf("la nueva medida en M es: C: %.2f con capdac: %d _-_-_-_-_-_-_-_-_-_-_-_-\n", capacidad[sampleNumber], capdac);
-				}
-
-				//fin debug.
-    		}
-    		//printf("CAPACIDAD ABSOLUTA: %f##########################################\n", capacidad[sampleNumber]+capdac*3.125);
-    		//FIN DE BLOQUE DE 3 RANGOS DE 28.125pF________________________________
-    		*/
-
-
-    		//printf("capdac: %d, Coffset: %f\n<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n", capdac, capdac*3.125);
 
 
     		sampleNumber++;
-
-
-
-
 
     		if( (cantMedidas-1) <sampleNumber){
 
@@ -920,12 +758,11 @@ static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 
     			//printf("\n\n");																										// COMENTADO PARA PROBAR EL FILTRO, DESCOMENTAR PARA IMPRIMIR EL PAQUETE.
     			for(int j=0; j<50; j++){
-    				packets.heigh[j]= cap_to_mm(ORDEN_APROXIMACION, capacidad[j], COEF_A, COEF_B, COEF_C, COEF_D);
-
-    				packets.heigh[j]-= mm_offset_cal;
+    				//packets.heigh[j]= cap_to_mm(ORDEN_APROXIMACION, capacidad[j], COEF_A, COEF_B, COEF_C, COEF_D);
+    				//packets.heigh[j]-= mm_offset_cal;
 
     				//printf(",%.2f", capacidad[j]);																						// COMENTADO PARA PROBAR EL FILTRO, DESCOMENTAR PARA IMPRIMIR EL PAQUETE.
-    				ESP_LOGI("capacidad==>", ",%.2f", capacidad[j]);
+    				//ESP_LOGI("capacidad==>", ",%.2f", capacidad[j]);
     				//ESP_LOGI("altura==>", ",%d", packets.heigh[j]);
     			}
     			ESP_LOGI("altura==>","\n\n\n\n_________________________________\n\n\n\n");															// COMENTADO PARA PROBAR EL FILTRO, DESCOMENTAR PARA IMPRIMIR EL PAQUETE.
@@ -943,26 +780,6 @@ static void timer_task(void* arg)							// VER DIAGRAMA DE FLUJO
 
 				packetID++;
 
-/*
-    			//ENVIAR. ESTA PARTE MUEVO COMPLETA A UNA TAREA NUEVA____________________________________________________________________________________
-				strcpy(dataToPublish, "[");			// no me deja poner dentro de sprintf.
-
-				sprintf(packetID_str, "%d", packetID++);
-				strcat(dataToPublish, packetID_str);
-
-
-				for(int i=0; i<sampleNumber; i++){
-					strcat(dataToPublish, ",");
-					sprintf(capacidad_str, "%.2f", capacidad[i]+3.125*capdac);
-					strcat(dataToPublish, capacidad_str);
-				}
-
-				strcat(dataToPublish, "]");			// no me deja poner dentro de sprintf..
-				//printf("####################\ndatos a publicar: %s\n######################\n", dataToPublish);
-				//esp_mqtt_client_publish(client, topic, dataToPublish, 0, 1, 0);
-				//printf("publico<<<<\n");
-				//FIN ENVIAR. ESTA PARTE MUEVO COMPLETA A UNA TAREA NUEVA________________________________________________________________________________
-*/
 				sampleNumber= 0;
 
 				if(1<pararConfirmado){
@@ -1315,6 +1132,26 @@ void app_main(void)
 
 
 
+    //dac
+
+    gpio_num_t dac_gpio_num;
+    dac_pad_get_io_num(DAC_CHANNEL_1, &dac_gpio_num);
+	gpio_set_pull_mode(dac_gpio_num, GPIO_FLOATING);
+
+	dac_cw_generator_disable();
+    dac_i2s_disable();
+    dac_output_voltage(DAC_CHANNEL_1, 0);
+    dac_output_enable(DAC_CHANNEL_1);
+
+    // COSENO DAC (para probar dac)
+    //dac_cw_config_t config_coseno;
+    //config_coseno= (dac_cw_config_t){ .en_ch= DAC_CHANNEL_1, .scale= DAC_CW_SCALE_1, .phase= DAC_CW_PHASE_0, .freq= 2000, .offset= 1};
+    //dac_cw_generator_config(&config_coseno);
+    //dac_cw_generator_enable();
+    //fin COSENO DAC
+    //dac
+
+
 
 
 
@@ -1330,7 +1167,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
 	ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-	ESP_ERROR_CHECK(example_connect());	// This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
+	//ESP_ERROR_CHECK(example_connect());	// This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
 										// Read "Establishing Wi-Fi or Ethernet Connection" section in examples/protocols/README.md for more information about this function.
 
 	mqtt_app_start();
@@ -1437,29 +1274,6 @@ void app_main(void)
 	*/
 
 	while(1){
-
-
-		//PRUEBA DE FILTRO:
-		/*
-		for(int m=0; m<400; m++){
-			filter_in= sine_1hz[m] + 0.5*sine_2hz[m] + 0.25*sine_5hz[m] + 0.125*sine_10hz[m]+0.5*white_noise[m];
-			SampleFilter_put(&filtroPrueba, filter_in);
-			filter_out= (float)SampleFilter_get(&filtroPrueba);
-			//printf("%.2f,", filter_output);
-			ESP_LOGI("DEBUG..","%.2f,", filter_out);
-
-
-
-		}
-		//printf("\n\n");
-		ESP_LOGI("DEBUG..", "\n\n\n\n\n\n\n\n============================================================================================================\n\n\n\n\n\n\n\n");
-		*/
-		//FIN PRUEBA DE FILTRO.
-
-
-
-
-		vTaskDelay(500/portTICK_RATE_MS);
 
 	}
 

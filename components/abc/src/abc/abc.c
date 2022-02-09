@@ -178,6 +178,27 @@ int cap_to_mm(uint8_t orden, float cap, float a, float b, float c, float d){
 
 
 
+float cap_to_mm_floatReturn(uint8_t orden, float cap, float a, float b, float c, float d){
+
+
+	float altura_f= (cap*cap*a + cap*b +c);
+	if(orden==3){
+		altura_f*= cap;
+		altura_f+= d;
+	}
+
+
+	if (999 < altura_f) {		// Altura maxima 1 metro
+		return 999;
+	}
+
+	return altura_f;
+}
+
+
+
+
+
 
 
 

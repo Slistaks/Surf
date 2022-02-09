@@ -96,7 +96,7 @@ typedef struct mean_reliability_struct {
 //
 //
 int cap_to_mm(uint8_t orden, float cap, float a, float b, float c, float d);
-
+float cap_to_mm_floatReturn(uint8_t orden, float cap, float a, float b, float c, float d);
 
 
 
